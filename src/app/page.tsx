@@ -15,9 +15,9 @@ import {
   UserStats 
 } from '../lib/dailyChallenge';
 import { 
-  Timer, Compass, RotateCcw, ArrowRight, Trophy, MapPin, 
+  Timer, Compass, RotateCcw, ArrowRight, ArrowLeft, Trophy, MapPin, 
   Globe, Sparkles, Flame, BookOpen, Eye, HelpCircle, 
-  Calendar, Zap, Clock 
+  Calendar, Zap, Clock, AlertCircle
 } from 'lucide-react';
 
 interface ScoreResult {
@@ -104,6 +104,7 @@ function generate50YearWindow(actualYear: number): { startStr: string; endStr: s
 
 export default function IndicGamePage() {
   const [showInstructions, setShowInstructions] = useState(false);
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const [todayDateStr, setTodayDateStr] = useState('');
   const [stats, setStats] = useState<UserStats>({ 
     currentStreak: 0, 
@@ -136,6 +137,18 @@ export default function IndicGamePage() {
 
   const [countdown, setCountdown] = useState({ hours: 0, minutes: 0, seconds: 0 });
 
+  // Native browser back button navigation handler
+  useEffect(() => {
+    const handlePopState = () => {
+      if (selectedDifficulty !== null) {
+        setSelectedDifficulty(null);
+        setShowQuitConfirm(false);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [selectedDifficulty]);
+
   useEffect(() => {
     const today = getTodayDateString();
     setTodayDateStr(today);
@@ -159,6 +172,11 @@ export default function IndicGamePage() {
   }, []);
 
   const handleStartMode = (difficulty: 'easy' | 'hard') => {
+    // Push browser state so native mobile back returns to menu
+    if (typeof window !== 'undefined') {
+      window.history.pushState({ mode: difficulty }, '');
+    }
+
     const dailyList = getDailyEvents(todayDateStr || getTodayDateString(), difficulty, 5);
     setActiveEvents(dailyList);
     setSelectedDifficulty(difficulty);
@@ -183,7 +201,7 @@ export default function IndicGamePage() {
   }, [isGameOver, selectedDifficulty, todayDateStr, totalScore]);
 
   useEffect(() => {
-    if (!selectedDifficulty || isSubmitted || isGameOver) return;
+    if (!selectedDifficulty || isSubmitted || isGameOver || showQuitConfirm) return;
 
     if (timeLeft <= 0) {
       handleSubmit(true);
@@ -195,7 +213,7 @@ export default function IndicGamePage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timeLeft, isSubmitted, isGameOver, selectedDifficulty]);
+  }, [timeLeft, isSubmitted, isGameOver, selectedDifficulty, showQuitConfirm]);
 
   const handleSubmit = (forcedTimeout: boolean = false) => {
     if (isSubmitted || !currentEvent) return;
@@ -228,7 +246,8 @@ export default function IndicGamePage() {
     setCurrentIndex((prev) => prev + 1);
   };
 
-  const handleRestart = () => {
+  const handleQuitRound = () => {
+    setShowQuitConfirm(false);
     setSelectedDifficulty(null);
   };
 
@@ -253,21 +272,20 @@ export default function IndicGamePage() {
   const isExactMatch = isSubmitted && lastHistoryItem ? lastHistoryItem.result.difference === 0 : false;
 
   return (
-    <main className="relative min-h-screen text-stone-100 flex flex-col items-center justify-center p-4 overflow-hidden selection:bg-amber-900 selection:text-amber-100">
+    <main className="relative min-h-screen text-stone-100 flex flex-col items-center justify-center p-3 sm:p-4 overflow-hidden selection:bg-amber-900 selection:text-amber-100">
       <AmbientBackground />
 
-      <div className="relative z-10 max-w-md w-full space-y-4">
+      <div className="relative z-10 max-w-md w-full space-y-3 sm:space-y-4">
 
-        {/* Screen 1: Mode Selection, Daily Streaks & Instructions Trigger */}
+        {/* Screen 1: Mode Selection & Daily Streaks */}
         {!selectedDifficulty && (
           <motion.div 
-            initial={{ opacity: 0, scale: 0.96 }}
+            initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.35 }}
-            className="bg-[#181a24]/85 border border-stone-800/80 rounded-3xl p-7 text-center space-y-6 shadow-2xl backdrop-blur-xl"
+            className="bg-[#181a24]/90 border border-stone-800/80 rounded-3xl p-6 sm:p-7 text-center space-y-6 shadow-2xl backdrop-blur-md"
           >
             {/* Top Bar with Date, Streak, and How-to-Play Trigger */}
-            <div className="flex justify-between items-center bg-[#0f1118]/80 px-4 py-2.5 rounded-2xl border border-stone-800/80">
+            <div className="flex justify-between items-center bg-[#0f1118]/80 px-3.5 py-2 rounded-2xl border border-stone-800/80">
               <span className="flex items-center gap-1.5 text-xs font-mono text-stone-300">
                 <Calendar className="w-3.5 h-3.5 text-amber-400" />
                 {todayDateStr || 'Today'}
@@ -289,21 +307,21 @@ export default function IndicGamePage() {
             </div>
 
             <div className="space-y-1">
-              <span className="text-xs uppercase tracking-widest text-amber-400 font-bold">Daily Bharat Challenge</span>
+              <span className="text-[11px] uppercase tracking-widest text-amber-400 font-bold">Daily Bharat Challenge</span>
               <h1 className="text-3xl font-serif font-bold text-stone-100">Today's Timeline</h1>
-              <p className="text-stone-400 text-xs">5 shared historical milestones for today across India</p>
+              <p className="text-stone-400 text-xs">5 shared historical milestones across India</p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 pt-1">
+            <div className="grid grid-cols-1 gap-3.5 pt-1">
               <button
                 onClick={() => handleStartMode('easy')}
-                className="p-5 rounded-2xl bg-stone-900/70 border border-stone-800/80 hover:border-amber-500/60 hover:bg-amber-950/20 text-left transition space-y-1.5 group backdrop-blur-sm"
+                className="p-4 sm:p-5 rounded-2xl bg-stone-900/80 border border-stone-800 hover:border-amber-500/60 active:bg-amber-950/30 text-left transition space-y-1 group"
               >
                 <div className="flex justify-between items-center">
-                  <span className="text-lg font-bold text-amber-400 flex items-center gap-2">
+                  <span className="text-base sm:text-lg font-bold text-amber-400 flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-amber-400" /> Easy Mode
                   </span>
-                  <span className="text-[11px] font-mono uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] font-mono uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">
                     Daily 5
                   </span>
                 </div>
@@ -314,13 +332,13 @@ export default function IndicGamePage() {
 
               <button
                 onClick={() => handleStartMode('hard')}
-                className="p-5 rounded-2xl bg-stone-900/70 border border-stone-800/80 hover:border-red-500/60 hover:bg-red-950/20 text-left transition space-y-1.5 group backdrop-blur-sm"
+                className="p-4 sm:p-5 rounded-2xl bg-stone-900/80 border border-stone-800 hover:border-red-500/60 active:bg-red-950/30 text-left transition space-y-1 group"
               >
                 <div className="flex justify-between items-center">
-                  <span className="text-lg font-bold text-red-400 flex items-center gap-2">
+                  <span className="text-base sm:text-lg font-bold text-red-400 flex items-center gap-2">
                     <Flame className="w-4 h-4 text-red-400" /> Hard Mode
                   </span>
-                  <span className="text-[11px] font-mono uppercase bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] font-mono uppercase bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full">
                     Historian
                   </span>
                 </div>
@@ -330,7 +348,6 @@ export default function IndicGamePage() {
               </button>
             </div>
 
-            {/* Quick How to Play Link */}
             <button
               onClick={() => setShowInstructions(true)}
               className="text-xs text-stone-400 hover:text-amber-400 transition underline underline-offset-4 font-medium"
@@ -343,15 +360,15 @@ export default function IndicGamePage() {
         {/* Screen 2: Game Over Screen */}
         {selectedDifficulty && isGameOver && (
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-[#181a24]/85 border border-stone-800/80 rounded-3xl p-7 text-center space-y-5 shadow-2xl backdrop-blur-xl relative overflow-hidden"
+            className="bg-[#181a24]/90 border border-stone-800/80 rounded-3xl p-6 text-center space-y-4 sm:space-y-5 shadow-2xl backdrop-blur-md"
           >
             <div className="inline-flex p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-              <Trophy className="w-10 h-10" />
+              <Trophy className="w-9 h-9" />
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <h1 className="text-2xl font-serif font-bold text-amber-100">Daily Challenge Complete!</h1>
               <p className="text-stone-400 text-xs tracking-wider uppercase font-medium">
                 Difficulty: <span className="text-amber-400 capitalize">{selectedDifficulty}</span>
@@ -359,34 +376,34 @@ export default function IndicGamePage() {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <div className="py-3 px-3 rounded-2xl bg-[#0f1118]/80 border border-stone-800/80">
+              <div className="py-2.5 px-3 rounded-2xl bg-[#0f1118]/80 border border-stone-800/80">
                 <p className="text-[10px] uppercase tracking-widest text-stone-500 font-semibold mb-0.5">Final Score</p>
-                <p className="text-3xl font-mono font-extrabold text-amber-400">
-                  {totalScore} <span className="text-stone-600 text-sm font-normal">/ {activeEvents.length * 125} Max</span>
+                <p className="text-2xl sm:text-3xl font-mono font-extrabold text-amber-400">
+                  {totalScore} <span className="text-stone-600 text-xs font-normal">/ {activeEvents.length * 125}</span>
                 </p>
               </div>
 
-              <div className="py-3 px-3 rounded-2xl bg-[#0f1118]/80 border border-stone-800/80">
+              <div className="py-2.5 px-3 rounded-2xl bg-[#0f1118]/80 border border-stone-800/80">
                 <p className="text-[10px] uppercase tracking-widest text-stone-500 font-semibold mb-0.5">Active Streak</p>
-                <p className="text-3xl font-mono font-extrabold text-emerald-400 flex items-center justify-center gap-1">
+                <p className="text-2xl sm:text-3xl font-mono font-extrabold text-emerald-400 flex items-center justify-center gap-1">
                   <Zap className="w-5 h-5 fill-emerald-400" />
                   {stats.currentStreak}
                 </p>
               </div>
             </div>
 
-            <div className="text-left space-y-2.5 max-h-52 overflow-y-auto pr-1">
+            <div className="text-left space-y-2 max-h-48 overflow-y-auto pr-1">
               {history.map(({ event, guessDisplay, result }) => (
-                <div key={event.id} className="p-3 rounded-xl bg-stone-900/60 border border-stone-800/80 flex justify-between items-center text-xs">
-                  <div className="space-y-0.5 max-w-[210px]">
+                <div key={event.id} className="p-2.5 rounded-xl bg-stone-900/60 border border-stone-800/80 flex justify-between items-center text-xs">
+                  <div className="space-y-0.5 max-w-[200px]">
                     <p className="font-semibold text-stone-200 truncate">{event.title}</p>
-                    <p className="text-stone-400 font-mono text-[11px]">
+                    <p className="text-stone-400 font-mono text-[10px]">
                       Actual: <span className="text-amber-300 font-medium">{event.displayYear}</span> | Guessed: {guessDisplay}
                     </p>
                   </div>
                   <div className="text-right">
                     <span className={`font-mono font-bold block ${result.color}`}>+{result.score} pts</span>
-                    <span className="text-[10px] text-stone-500 font-medium">
+                    <span className="text-[9px] text-stone-500 font-medium">
                       {result.timeBonus > 0 ? `⚡ ${result.title}` : result.title}
                     </span>
                   </div>
@@ -394,8 +411,8 @@ export default function IndicGamePage() {
               ))}
             </div>
 
-            <div className="py-2.5 px-3 bg-[#0f1118]/60 rounded-xl border border-stone-800/60 flex items-center justify-between text-xs text-stone-400">
-              <span className="flex items-center gap-1.5">
+            <div className="py-2 px-3 bg-[#0f1118]/60 rounded-xl border border-stone-800/60 flex items-center justify-between text-xs text-stone-400">
+              <span className="flex items-center gap-1.5 text-[11px]">
                 <Clock className="w-3.5 h-3.5 text-amber-400" /> Next Challenge in:
               </span>
               <span className="font-mono font-bold text-stone-200">
@@ -406,8 +423,8 @@ export default function IndicGamePage() {
             </div>
 
             <button
-              onClick={handleRestart}
-              className="w-full py-3.5 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 text-stone-950 font-bold rounded-2xl flex items-center justify-center gap-2 transition shadow-lg shadow-amber-950/40"
+              onClick={handleQuitRound}
+              className="w-full py-3.5 bg-gradient-to-r from-amber-600 to-amber-500 active:from-amber-500 text-stone-950 font-bold rounded-2xl flex items-center justify-center gap-2 transition shadow-lg shadow-amber-950/40"
             >
               <RotateCcw className="w-4 h-4 stroke-[2.5]" /> Return to Menu
             </button>
@@ -416,31 +433,40 @@ export default function IndicGamePage() {
 
         {/* Screen 3: Active Question Screen */}
         {selectedDifficulty && !isGameOver && currentEvent && (
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             
-            {/* Header */}
+            {/* Header with BACK ARROW Button */}
             <header className="flex justify-between items-center px-1">
-              <div className="space-y-0.5">
-                <span className="text-xs uppercase tracking-widest text-amber-400 font-bold flex items-center gap-1.5">
-                  <Compass className="w-3.5 h-3.5" /> Early
-                </span>
-                <p className="text-xs text-stone-400 font-medium">
-                  Question {currentIndex + 1} of {activeEvents.length} • <span className="capitalize text-amber-400/90">{selectedDifficulty}</span>
-                </p>
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={() => setShowQuitConfirm(true)}
+                  className="p-1.5 rounded-xl bg-[#181a24]/90 border border-stone-800 hover:border-stone-700 text-stone-400 hover:text-white active:scale-95 transition"
+                  title="Quit to Menu"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <div className="space-y-0.5">
+                  <span className="text-[11px] uppercase tracking-widest text-amber-400 font-bold flex items-center gap-1">
+                    <Compass className="w-3.5 h-3.5" /> Early
+                  </span>
+                  <p className="text-[11px] text-stone-400 font-medium">
+                    {currentIndex + 1} of {activeEvents.length} • <span className="capitalize text-amber-400/90">{selectedDifficulty}</span>
+                  </p>
+                </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowInstructions(true)}
-                  className="p-1.5 rounded-full hover:bg-stone-800/80 text-stone-400 hover:text-amber-400 transition"
+                  className="p-1.5 rounded-full hover:bg-stone-800 text-stone-400 hover:text-amber-400 transition"
                   title="Instructions"
                 >
                   <HelpCircle className="w-4 h-4" />
                 </button>
 
-                <div className="flex items-center gap-2 bg-[#181a24]/90 border border-stone-800/90 px-3 py-1.5 rounded-full shadow-inner backdrop-blur-md">
-                  <Timer className={`w-4 h-4 ${timeLeft <= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`} />
-                  <span className={`font-mono text-sm font-semibold ${timeLeft <= 5 ? 'text-red-400' : 'text-stone-300'}`}>
+                <div className="flex items-center gap-1.5 bg-[#181a24]/90 border border-stone-800 px-3 py-1 rounded-full shadow-inner">
+                  <Timer className={`w-3.5 h-3.5 ${timeLeft <= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`} />
+                  <span className={`font-mono text-xs font-semibold ${timeLeft <= 5 ? 'text-red-400' : 'text-stone-300'}`}>
                     {timeLeft}s
                   </span>
                 </div>
@@ -448,7 +474,7 @@ export default function IndicGamePage() {
             </header>
 
             {/* Dual-Wheel Timeline Track */}
-            <div className="bg-[#181a24]/75 p-3 rounded-2xl border border-stone-800/80 backdrop-blur-md shadow-lg pb-4">
+            <div className="bg-[#181a24]/75 p-3 rounded-2xl border border-stone-800/80 shadow-md pb-4">
               <KalachakraTrack 
                 isSubmitted={isSubmitted}
                 actualPercent={actualPercent}
@@ -464,38 +490,38 @@ export default function IndicGamePage() {
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentIndex}
-                initial={{ opacity: 0, y: 15 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                transition={{ duration: 0.3 }}
-                className="bg-[#181a24]/85 border border-stone-800/80 rounded-3xl p-6 space-y-4 shadow-2xl backdrop-blur-xl relative"
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.25 }}
+                className="bg-[#181a24]/90 border border-stone-800/80 rounded-3xl p-5 sm:p-6 space-y-3.5 shadow-2xl relative"
               >
                 {/* Badges */}
-                <div className="flex flex-wrap gap-2 items-center">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    <Compass className="w-3.5 h-3.5" /> {currentEvent.eraLabel}
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    <Compass className="w-3 h-3" /> {currentEvent.eraLabel}
                   </span>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-stone-900/80 text-stone-400 border border-stone-700/60">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-stone-900/80 text-stone-400 border border-stone-700/60">
                     <MapPin className="w-3 h-3" /> {currentEvent.region}
                   </span>
                 </div>
 
                 {/* Event Description */}
-                <div className="space-y-1.5">
-                  <h2 className="text-2xl font-serif font-bold text-stone-100 tracking-tight leading-snug">
+                <div className="space-y-1">
+                  <h2 className="text-xl sm:text-2xl font-serif font-bold text-stone-100 tracking-tight leading-snug">
                     {currentEvent.title}
                   </h2>
-                  <p className="text-stone-300/90 text-sm leading-relaxed">
+                  <p className="text-stone-300/90 text-xs sm:text-sm leading-relaxed">
                     {currentEvent.description}
                   </p>
                 </div>
 
                 {/* Lifelines Panel */}
                 {!isSubmitted && (
-                  <div className="space-y-2.5 pt-1 border-t border-stone-800/60">
-                    <div className="flex items-center justify-between text-[11px] font-medium text-stone-400 px-0.5">
+                  <div className="space-y-2 pt-1 border-t border-stone-800/60">
+                    <div className="flex items-center justify-between text-[10px] font-medium text-stone-400 px-0.5">
                       <span className="flex items-center gap-1">
-                        <HelpCircle className="w-3.5 h-3.5 text-amber-400" /> Round Lifelines ({(!used50YearLifeline ? 1 : 0) + (!usedWorldClueLifeline ? 1 : 0)}/2 left):
+                        <HelpCircle className="w-3.5 h-3.5 text-amber-400" /> Lifelines ({(!used50YearLifeline ? 1 : 0) + (!usedWorldClueLifeline ? 1 : 0)}/2 left):
                       </span>
                     </div>
 
@@ -507,7 +533,7 @@ export default function IndicGamePage() {
                         className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition border ${
                           used50YearLifeline
                             ? 'bg-stone-900/40 border-stone-800 text-stone-600 cursor-not-allowed'
-                            : 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-300'
+                            : 'bg-amber-500/10 active:bg-amber-500/20 border-amber-500/30 text-amber-300'
                         }`}
                       >
                         <Eye className="w-3.5 h-3.5" />
@@ -521,7 +547,7 @@ export default function IndicGamePage() {
                         className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition border ${
                           usedWorldClueLifeline
                             ? 'bg-stone-900/40 border-stone-800 text-stone-600 cursor-not-allowed'
-                            : 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-300'
+                            : 'bg-amber-500/10 active:bg-amber-500/20 border-amber-500/30 text-amber-300'
                         }`}
                       >
                         <Globe className="w-3.5 h-3.5" />
@@ -530,48 +556,42 @@ export default function IndicGamePage() {
                     </div>
 
                     {activeClues.window50Year && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: -4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200 text-center font-mono"
-                      >
-                        🎯 Window: Between <strong className="text-white">{activeClues.window50Year.startStr}</strong> and <strong className="text-white">{activeClues.window50Year.endStr}</strong>
-                      </motion.div>
+                      <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200 text-center font-mono">
+                        🎯 Between <strong className="text-white">{activeClues.window50Year.startStr}</strong> and <strong className="text-white">{activeClues.window50Year.endStr}</strong>
+                      </div>
                     )}
 
                     {activeClues.worldClue && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: -4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-xs text-sky-200 text-left leading-relaxed"
-                      >
+                      <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-xs text-sky-200 text-left leading-relaxed">
                         <span className="font-semibold block text-[10px] uppercase tracking-wider text-sky-400 mb-0.5">Meanwhile across the world:</span>
                         {activeClues.worldClue}
-                      </motion.div>
+                      </div>
                     )}
                   </div>
                 )}
 
                 {/* Form or Result View */}
                 {!isSubmitted ? (
-                  <form onSubmit={(e) => { e.preventDefault(); handleSubmit(false); }} className="space-y-4 pt-1">
+                  <form onSubmit={(e) => { e.preventDefault(); handleSubmit(false); }} className="space-y-3 pt-1">
                     <div className="flex gap-2">
                       <input
                         type="number"
-                        placeholder="Enter Year (e.g. 1930)"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        placeholder="Year (e.g. 1930)"
                         value={yearInput}
                         onChange={(e) => setYearInput(e.target.value)}
                         autoFocus
                         min="0"
-                        className="flex-1 bg-[#0f1118]/90 border border-stone-800 focus:border-amber-500 text-center font-mono text-2xl py-3 rounded-2xl focus:outline-none text-stone-100 placeholder:text-stone-600 transition shadow-inner"
+                        className="flex-1 bg-[#0f1118]/90 border border-stone-800 focus:border-amber-500 text-center font-mono text-xl sm:text-2xl py-2.5 sm:py-3 rounded-2xl focus:outline-none text-stone-100 placeholder:text-stone-600 shadow-inner"
                       />
 
                       <div className="flex bg-[#0f1118]/90 p-1 rounded-2xl border border-stone-800">
                         <button
                           type="button"
                           onClick={() => setEraType('BCE')}
-                          className={`px-3 py-2 text-xs font-bold rounded-xl transition ${
-                            eraType === 'BCE' ? 'bg-amber-500 text-stone-950 shadow-md' : 'text-stone-500 hover:text-stone-300'
+                          className={`px-3 py-1.5 text-xs font-bold rounded-xl transition ${
+                            eraType === 'BCE' ? 'bg-amber-500 text-stone-950 shadow-md' : 'text-stone-500'
                           }`}
                         >
                           BCE
@@ -579,8 +599,8 @@ export default function IndicGamePage() {
                         <button
                           type="button"
                           onClick={() => setEraType('CE')}
-                          className={`px-3 py-2 text-xs font-bold rounded-xl transition ${
-                            eraType === 'CE' ? 'bg-amber-500 text-stone-950 shadow-md' : 'text-stone-500 hover:text-stone-300'
+                          className={`px-3 py-1.5 text-xs font-bold rounded-xl transition ${
+                            eraType === 'CE' ? 'bg-amber-500 text-stone-950 shadow-md' : 'text-stone-500'
                           }`}
                         >
                           CE
@@ -591,41 +611,41 @@ export default function IndicGamePage() {
                     <button
                       type="submit"
                       disabled={!yearInput.trim()}
-                      className="w-full py-3.5 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-stone-950 font-bold rounded-2xl transition shadow-lg shadow-amber-950/40"
+                      className="w-full py-3.5 bg-gradient-to-r from-amber-600 to-amber-500 active:from-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-stone-950 font-bold rounded-2xl transition shadow-lg shadow-amber-950/40 text-sm"
                     >
                       Submit Guess
                     </button>
                   </form>
                 ) : (
-                  <div className="space-y-4 pt-2">
-                    <div className="bg-[#0f1118]/90 border border-stone-800/80 rounded-2xl p-4 text-center space-y-3.5 shadow-inner">
+                  <div className="space-y-3.5 pt-1">
+                    <div className="bg-[#0f1118]/90 border border-stone-800/80 rounded-2xl p-3.5 text-center space-y-3 shadow-inner">
                       
                       {/* Comparison Row */}
-                      <div className="flex items-center justify-between border-b border-stone-800/80 pb-3 gap-2">
+                      <div className="flex items-center justify-between border-b border-stone-800/80 pb-2.5 gap-2">
                         <div className="flex-1 flex justify-around items-center">
                           <div>
-                            <span className="text-[10px] uppercase font-bold tracking-wider text-stone-500 block">Actual Year</span>
-                            <span className="font-mono text-lg font-bold text-amber-400">{currentEvent.displayYear}</span>
+                            <span className="text-[9px] uppercase font-bold tracking-wider text-stone-500 block">Actual Year</span>
+                            <span className="font-mono text-base sm:text-lg font-bold text-amber-400">{currentEvent.displayYear}</span>
                           </div>
-                          <div className="w-[1px] h-8 bg-stone-800" />
+                          <div className="w-[1px] h-7 bg-stone-800" />
                           <div>
-                            <span className="text-[10px] uppercase font-bold tracking-wider text-stone-500 block">Your Guess</span>
-                            <span className="font-mono text-lg font-medium text-stone-200">
+                            <span className="text-[9px] uppercase font-bold tracking-wider text-stone-500 block">Your Guess</span>
+                            <span className="font-mono text-base sm:text-lg font-medium text-stone-200">
                               {lastHistoryItem?.guessDisplay}
                             </span>
                           </div>
                         </div>
 
-                        <div className="border-l border-stone-800/80 pl-4 flex items-center justify-center shrink-0">
-                          <IndiaMap highlightRegion={currentEvent.region} className="w-24 h-28" />
+                        <div className="border-l border-stone-800/80 pl-3 flex items-center justify-center shrink-0">
+                          <IndiaMap highlightRegion={currentEvent.region} className="w-20 h-24" />
                         </div>
                       </div>
 
-                      {/* Score Result with Speed Bonus Breakout */}
+                      {/* Score Result */}
                       {lastHistoryItem?.result && (
                         <div className="space-y-1">
                           <div className="flex items-center justify-center gap-2">
-                            <span className={`text-3xl font-mono font-extrabold ${lastHistoryItem.result.color}`}>
+                            <span className={`text-2xl sm:text-3xl font-mono font-extrabold ${lastHistoryItem.result.color}`}>
                               +{lastHistoryItem.result.score}
                             </span>
                             <span className="text-xs font-sans font-semibold uppercase tracking-wider text-stone-400">
@@ -634,7 +654,7 @@ export default function IndicGamePage() {
                           </div>
 
                           {lastHistoryItem.result.timeBonus > 0 && (
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] font-mono text-amber-300">
+                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] font-mono text-amber-300">
                               <span>⚡ {lastHistoryItem.result.multiplier}x Speed Bonus</span>
                               <span className="text-amber-400 font-bold">(+{lastHistoryItem.result.timeBonus} pts)</span>
                             </div>
@@ -649,8 +669,8 @@ export default function IndicGamePage() {
                       </div>
 
                       {/* World Event */}
-                      <div className="mt-3 p-3 rounded-xl bg-[#181a24]/80 border border-amber-900/30 text-left space-y-1.5 shadow-sm">
-                        <div className="flex items-center gap-1.5 text-amber-400 font-medium text-[11px] tracking-wide">
+                      <div className="p-2.5 rounded-xl bg-[#181a24]/80 border border-amber-900/30 text-left space-y-1">
+                        <div className="flex items-center gap-1.5 text-amber-400 font-medium text-[10px] tracking-wide">
                           <Globe className="w-3.5 h-3.5" />
                           <span>Meanwhile across the world ({currentEvent.worldContemporary.displayYear}):</span>
                         </div>
@@ -662,7 +682,7 @@ export default function IndicGamePage() {
 
                     <button
                       onClick={handleNext}
-                      className="w-full py-3.5 bg-stone-100 hover:bg-white text-stone-950 font-bold rounded-2xl flex items-center justify-center gap-2 transition shadow-md"
+                      className="w-full py-3.5 bg-stone-100 active:bg-white text-stone-950 font-bold rounded-2xl flex items-center justify-center gap-2 transition shadow-md text-sm"
                     >
                       Next Event <ArrowRight className="w-4 h-4" />
                     </button>
@@ -673,6 +693,44 @@ export default function IndicGamePage() {
           </div>
         )}
       </div>
+
+      {/* Confirmation Modal to Quit to Menu */}
+      <AnimatePresence>
+        {showQuitConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#161822] border border-stone-800 rounded-3xl p-6 text-center space-y-4 shadow-2xl"
+            >
+              <div className="inline-flex p-3 rounded-2xl bg-amber-500/10 text-amber-400">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-serif font-bold text-stone-100">Exit Current Challenge?</h3>
+                <p className="text-xs text-stone-400 leading-relaxed">
+                  Your current round's progress will be lost. You can restart the daily challenge whenever you're ready.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  onClick={() => setShowQuitConfirm(false)}
+                  className="py-2.5 rounded-xl bg-stone-800 text-stone-300 font-semibold text-xs hover:bg-stone-700 transition"
+                >
+                  Keep Playing
+                </button>
+                <button
+                  onClick={handleQuitRound}
+                  className="py-2.5 rounded-xl bg-red-600 text-white font-semibold text-xs hover:bg-red-500 transition"
+                >
+                  Quit to Menu
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Instructions Modal */}
       <InstructionsModal

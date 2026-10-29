@@ -1,17 +1,14 @@
 'use client';
 
 import React from 'react';
-import { motion } from 'framer-motion';
 
 export default function AmbientBackground() {
   const embers = [
-    { id: 1, x: '6%', size: 3, duration: 14, delay: 0 },
-    { id: 2, x: '18%', size: 2, duration: 18, delay: 4 },
-    { id: 3, x: '34%', size: 3.5, duration: 12, delay: 1 },
-    { id: 4, x: '52%', size: 2.5, duration: 16, delay: 5 },
-    { id: 5, x: '68%', size: 3, duration: 13, delay: 2 },
-    { id: 6, x: '84%', size: 2, duration: 17, delay: 3 },
-    { id: 7, x: '94%', size: 3.5, duration: 15, delay: 6 },
+    { id: 1, left: '8%', delay: '0s', duration: '12s' },
+    { id: 2, left: '26%', delay: '3s', duration: '15s' },
+    { id: 3, left: '50%', delay: '1s', duration: '11s' },
+    { id: 4, left: '74%', delay: '4s', duration: '14s' },
+    { id: 5, left: '90%', delay: '2s', duration: '13s' },
   ];
 
   return (
@@ -19,24 +16,30 @@ export default function AmbientBackground() {
       {/* 1. Deep Indic Twilight Atmosphere */}
       <div className="absolute inset-0 bg-gradient-to-b from-[#0a0d14] via-[#101420] to-[#181116]" />
 
-      {/* 2. Soft Ambient Vignettes */}
-      <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[750px] h-[480px] bg-gradient-to-b from-amber-500/18 via-orange-600/10 to-transparent rounded-full blur-[140px]" />
-      <div className="absolute top-1/4 -left-20 w-[420px] h-[420px] bg-indigo-500/12 rounded-full blur-[130px]" />
-      <div className="absolute bottom-24 -right-20 w-[460px] h-[400px] bg-amber-600/12 rounded-full blur-[130px]" />
+      {/* 2. Fast GPU Ambient Glows (Using pure radial gradients instead of heavy CSS blur filters) */}
+      <div 
+        className="absolute -top-24 left-1/2 -translate-x-1/2 w-[550px] h-[360px] opacity-40"
+        style={{
+          background: 'radial-gradient(ellipse at center, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.08) 50%, transparent 75%)',
+        }}
+      />
+      <div 
+        className="absolute bottom-16 -right-20 w-[350px] h-[350px] opacity-30"
+        style={{
+          background: 'radial-gradient(circle at center, rgba(217, 119, 6, 0.2) 0%, transparent 70%)',
+        }}
+      />
 
-      {/* 3. The Grand Kālachakra / Astrolabe Mandala */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[720px] h-[720px] opacity-20 pointer-events-none">
-        {/* Outer Ring: Rotating Celestial Orbit */}
-        <motion.svg
+      {/* 3. The Grand Kālachakra Astrolabe (Hardware-Accelerated CSS rotation) */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] h-[560px] opacity-15 pointer-events-none will-change-transform">
+        {/* Outer Ring */}
+        <svg
           viewBox="0 0 400 400"
-          className="w-full h-full"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 160, repeat: Infinity, ease: 'linear' }}
+          className="w-full h-full animate-[spin_180s_linear_infinite]"
         >
           <circle cx="200" cy="200" r="190" fill="none" stroke="#f59e0b" strokeWidth="1" strokeDasharray="4 8" />
           <circle cx="200" cy="200" r="175" fill="none" stroke="#d97706" strokeWidth="1.2" opacity="0.6" />
 
-          {/* 12 Astrolabe Cardinal Ticks */}
           {Array.from({ length: 12 }).map((_, i) => {
             const angle = (i * 30 * Math.PI) / 180;
             const x1 = Number((200 + 175 * Math.cos(angle)).toFixed(2));
@@ -55,14 +58,12 @@ export default function AmbientBackground() {
               />
             );
           })}
-        </motion.svg>
+        </svg>
 
-        {/* Inner Counter-Rotating Yantra Wheel (24 Spokes of Ashoka Chakra) */}
-        <motion.svg
+        {/* Inner Counter-Rotating Spokes */}
+        <svg
           viewBox="0 0 300 300"
-          className="absolute inset-12 w-[calc(100%-6rem)] h-[calc(100%-6rem)]"
-          animate={{ rotate: -360 }}
-          transition={{ duration: 120, repeat: Infinity, ease: 'linear' }}
+          className="absolute inset-14 w-[calc(100%-7rem)] h-[calc(100%-7rem)] animate-[spin_120s_linear_infinite_reverse]"
         >
           <circle cx="150" cy="150" r="120" fill="none" stroke="#fbbf24" strokeWidth="1" strokeDasharray="2 6" />
           <circle cx="150" cy="150" r="85" fill="none" stroke="#b45309" strokeWidth="1" opacity="0.8" />
@@ -84,22 +85,16 @@ export default function AmbientBackground() {
               />
             );
           })}
-        </motion.svg>
+        </svg>
       </div>
 
-      {/* 4. Architectural Indic Skyline */}
-      <div className="absolute bottom-0 inset-x-0 h-44 opacity-30">
+      {/* 4. Fort Skyline Silhouette */}
+      <div className="absolute bottom-0 inset-x-0 h-36 opacity-25">
         <svg
           viewBox="0 0 1200 200"
           preserveAspectRatio="none"
           className="w-full h-full"
-          xmlns="http://www.w3.org/2000/svg"
         >
-          <path
-            d="M 0,110 Q 180,80 380,105 T 780,95 T 1200,105 L 1200,200 L 0,200 Z"
-            fill="#1e1824"
-            opacity="0.7"
-          />
           <path
             d={`
               M 0,150 
@@ -117,46 +112,40 @@ export default function AmbientBackground() {
             `}
             fill="#121017"
           />
-          <circle cx="260" cy="70" r="2" fill="#fbbf24" className="animate-pulse" />
-          <circle cx="500" cy="95" r="2" fill="#f59e0b" className="animate-pulse" />
-          <circle cx="860" cy="60" r="2.5" fill="#f59e0b" className="animate-pulse" />
-          <circle cx="1120" cy="90" r="2" fill="#fbbf24" className="animate-pulse" />
         </svg>
       </div>
 
-      {/* 5. Floating Amber Embers */}
+      {/* 5. Pure CSS Floating Embers (Zero CPU drain on mobile) */}
       {embers.map((p) => (
-        <motion.div
+        <span
           key={p.id}
-          className="absolute rounded-full bg-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.7)]"
+          className="absolute w-1 h-1 rounded-full bg-amber-400 opacity-70 animate-pulse pointer-events-none"
           style={{
-            left: p.x,
-            bottom: '-20px',
-            width: `${p.size}px`,
-            height: `${p.size}px`,
-          }}
-          animate={{
-            y: ['0vh', '-110vh'],
-            opacity: [0, 0.8, 0.45, 0],
-            x: ['0px', '28px', '-22px', '14px'],
-          }}
-          transition={{
-            duration: p.duration,
-            repeat: Infinity,
-            delay: p.delay,
-            ease: 'easeInOut',
+            left: p.left,
+            bottom: '-10px',
+            animation: `floatUp ${p.duration} infinite linear ${p.delay}`,
           }}
         />
       ))}
 
-      {/* 6. Subtle Jali Pattern Overlay */}
-      <div
-        className="absolute inset-0 opacity-[0.035]"
-        style={{
-          backgroundImage: 'radial-gradient(#f59e0b 1px, transparent 1px)',
-          backgroundSize: '36px 36px',
-        }}
-      />
+      <style jsx>{`
+        @keyframes floatUp {
+          0% {
+            transform: translateY(0px) scale(0.8);
+            opacity: 0;
+          }
+          15% {
+            opacity: 0.8;
+          }
+          85% {
+            opacity: 0.4;
+          }
+          100% {
+            transform: translateY(-105vh) scale(1.1);
+            opacity: 0;
+          }
+        }
+      `}</style>
     </div>
   );
 }
