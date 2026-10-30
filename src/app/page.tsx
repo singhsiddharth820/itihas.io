@@ -12,7 +12,9 @@ import {
   getDailyEvents, 
   loadUserStats, 
   recordDailyCompletion, 
-  UserStats 
+  getSavedDailyCompletion,
+  UserStats,
+  DailyHistoryRecord
 } from '../lib/dailyChallenge';
 import { 
   Timer, Compass, RotateCcw, ArrowRight, ArrowLeft, Trophy, MapPin, 
@@ -24,12 +26,13 @@ interface ScoreResult {
   score: number;
   baseScore: number;
   timeBonus: number;
-  multiplier: number;
   difference: number;
   title: string;
   color: string;
 }
 
+// Transparent 0 - 100 Scoring Model:
+// Base Proximity: 0 - 80 pts | Speed Bonus: 0 - 20 pts | Total: Max 100 pts
 function calculateIndianScore(
   guessedYear: number, 
   actualYear: number, 
@@ -41,30 +44,32 @@ function calculateIndianScore(
   const yearsAgo = Math.max(1, currentYear - actualYear);
   const relativeDiff = difference / yearsAgo;
 
+  // 1. Base Accuracy (Max 80 points)
   let baseScore = 0;
   if (difference === 0) {
-    baseScore = 100;
+    baseScore = 80;
   } else {
-    baseScore = Math.max(0, Math.round(100 * Math.exp(-relativeDiff * 6.5)));
+    baseScore = Math.max(0, Math.round(80 * Math.exp(-relativeDiff * 6.5)));
   }
 
+  // 2. Speed Bonus (Max 20 points)
+  // Only rewarded if the answer has reasonable accuracy (> 25 base points)
   const safeTimeLeft = Math.max(0, Math.min(totalTime, timeLeft));
-  const speedRatio = safeTimeLeft / totalTime;
-  const multiplier = Number((1 + speedRatio * 0.25).toFixed(2));
+  const timeBonus = baseScore > 25 ? Math.round((safeTimeLeft / totalTime) * 20) : 0;
 
-  const totalScore = baseScore > 30 ? Math.round(baseScore * multiplier) : baseScore;
-  const timeBonus = totalScore - baseScore;
+  // Total score strictly capped between 0 and 100
+  const totalScore = Math.min(100, baseScore + timeBonus);
 
   let title = 'Off the Mark';
   let color = 'text-stone-400';
 
-  if (baseScore >= 95) {
+  if (baseScore >= 75) {
     title = 'Bullseye!';
     color = 'text-amber-400';
-  } else if (baseScore >= 75) {
+  } else if (baseScore >= 55) {
     title = 'Very Close!';
     color = 'text-emerald-400';
-  } else if (baseScore >= 40) {
+  } else if (baseScore >= 25) {
     title = 'Decent Guess';
     color = 'text-sky-400';
   }
@@ -73,7 +78,6 @@ function calculateIndianScore(
     score: totalScore, 
     baseScore, 
     timeBonus, 
-    multiplier, 
     difference, 
     title, 
     color 
@@ -105,7 +109,9 @@ function generate50YearWindow(actualYear: number): { startStr: string; endStr: s
 export default function IndicGamePage() {
   const [showInstructions, setShowInstructions] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
+  const [timeBonusNotice, setTimeBonusNotice] = useState(false);
   const [todayDateStr, setTodayDateStr] = useState('');
+  const [hasCompletedToday, setHasCompletedToday] = useState(false);
   const [stats, setStats] = useState<UserStats>({ 
     currentStreak: 0, 
     maxStreak: 0, 
@@ -121,12 +127,7 @@ export default function IndicGamePage() {
   const [timeLeft, setTimeLeft] = useState(25);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [totalScore, setTotalScore] = useState(0);
-  const [history, setHistory] = useState<Array<{ 
-    event: IndianHistoryEvent; 
-    guessDisplay: string;
-    result: ScoreResult;
-    guessedYear: number;
-  }>>([]);
+  const [history, setHistory] = useState<DailyHistoryRecord[]>([]);
 
   const [used50YearLifeline, setUsed50YearLifeline] = useState(false);
   const [usedWorldClueLifeline, setUsedWorldClueLifeline] = useState(false);
@@ -140,19 +141,30 @@ export default function IndicGamePage() {
   // Native browser back button navigation handler
   useEffect(() => {
     const handlePopState = () => {
-      if (selectedDifficulty !== null) {
+      if (selectedDifficulty !== null && !hasCompletedToday) {
         setSelectedDifficulty(null);
         setShowQuitConfirm(false);
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [selectedDifficulty]);
+  }, [selectedDifficulty, hasCompletedToday]);
 
+  // Check today's completion on page load/refresh
   useEffect(() => {
     const today = getTodayDateString();
     setTodayDateStr(today);
     setStats(loadUserStats());
+
+    const savedToday = getSavedDailyCompletion(today);
+    if (savedToday) {
+      setHasCompletedToday(true);
+      setSelectedDifficulty(savedToday.difficulty);
+      setTotalScore(savedToday.totalScore);
+      setHistory(savedToday.history);
+      setActiveEvents(savedToday.history.map(h => h.event));
+      setCurrentIndex(savedToday.history.length); // triggers completion view
+    }
 
     const updateMidnightTimer = () => {
       const now = new Date();
@@ -172,7 +184,6 @@ export default function IndicGamePage() {
   }, []);
 
   const handleStartMode = (difficulty: 'easy' | 'hard') => {
-    // Push browser state so native mobile back returns to menu
     if (typeof window !== 'undefined') {
       window.history.pushState({ mode: difficulty }, '');
     }
@@ -193,13 +204,16 @@ export default function IndicGamePage() {
   const currentEvent = activeEvents[currentIndex];
   const isGameOver = selectedDifficulty !== null && currentIndex >= activeEvents.length;
 
+  // Persist completion state upon finishing
   useEffect(() => {
-    if (isGameOver && selectedDifficulty) {
-      const updated = recordDailyCompletion(todayDateStr, totalScore);
+    if (isGameOver && selectedDifficulty && !hasCompletedToday && history.length > 0) {
+      const updated = recordDailyCompletion(todayDateStr, selectedDifficulty, totalScore, history);
       setStats(updated);
+      setHasCompletedToday(true);
     }
-  }, [isGameOver, selectedDifficulty, todayDateStr, totalScore]);
+  }, [isGameOver, selectedDifficulty, todayDateStr, totalScore, history, hasCompletedToday]);
 
+  // Turn timer
   useEffect(() => {
     if (!selectedDifficulty || isSubmitted || isGameOver || showQuitConfirm) return;
 
@@ -232,7 +246,7 @@ export default function IndicGamePage() {
     setTotalScore((prev) => prev + result.score);
     setHistory((prev) => [
       ...prev, 
-      { event: currentEvent, guessDisplay: displayStr, result, guessedYear: computedGuess }
+      { event: currentEvent, guessDisplay: displayStr, result }
     ]);
     setIsSubmitted(true);
   };
@@ -251,25 +265,44 @@ export default function IndicGamePage() {
     setSelectedDifficulty(null);
   };
 
+  // Lifelines: add +10s on activation
   const trigger50YearLifeline = () => {
     if (used50YearLifeline || isSubmitted || !currentEvent) return;
     const window = generate50YearWindow(currentEvent.year);
     setActiveClues((prev) => ({ ...prev, window50Year: window }));
     setUsed50YearLifeline(true);
+    
+    // Add extra 10 seconds
+    setTimeLeft((prev) => Math.min(35, prev + 10));
+    setTimeBonusNotice(true);
+    setTimeout(() => setTimeBonusNotice(false), 2000);
   };
 
   const triggerWorldClueLifeline = () => {
     if (usedWorldClueLifeline || isSubmitted || !currentEvent) return;
     setActiveClues((prev) => ({ ...prev, worldClue: currentEvent.worldContemporary.description }));
     setUsedWorldClueLifeline(true);
+    
+    // Add extra 10 seconds
+    setTimeLeft((prev) => Math.min(35, prev + 10));
+    setTimeBonusNotice(true);
+    setTimeout(() => setTimeBonusNotice(false), 2000);
   };
 
   const lastHistoryItem = history[history.length - 1];
   const actualPercent = currentEvent ? getTimelinePercentage(currentEvent.year) : 50;
-  const guessedPercent = isSubmitted && lastHistoryItem 
-    ? getTimelinePercentage(lastHistoryItem.guessedYear) 
-    : 50;
-  const isExactMatch = isSubmitted && lastHistoryItem ? lastHistoryItem.result.difference === 0 : false;
+  
+  let guessedPercent = 50;
+  let isExactMatch = false;
+  if (isSubmitted && lastHistoryItem) {
+    isExactMatch = lastHistoryItem.result.difference === 0;
+    const guessedNumeric = currentEvent.year + (
+      lastHistoryItem.guessDisplay.includes('BCE')
+        ? -lastHistoryItem.result.difference
+        : lastHistoryItem.result.difference
+    );
+    guessedPercent = getTimelinePercentage(guessedNumeric);
+  }
 
   return (
     <main className="relative min-h-screen text-stone-100 flex flex-col items-center justify-center p-3 sm:p-4 overflow-hidden selection:bg-amber-900 selection:text-amber-100">
@@ -284,7 +317,6 @@ export default function IndicGamePage() {
             animate={{ opacity: 1, scale: 1 }}
             className="bg-[#181a24]/90 border border-stone-800/80 rounded-3xl p-6 sm:p-7 text-center space-y-6 shadow-2xl backdrop-blur-md"
           >
-            {/* Top Bar with Date, Streak, and How-to-Play Trigger */}
             <div className="flex justify-between items-center bg-[#0f1118]/80 px-3.5 py-2 rounded-2xl border border-stone-800/80">
               <span className="flex items-center gap-1.5 text-xs font-mono text-stone-300">
                 <Calendar className="w-3.5 h-3.5 text-amber-400" />
@@ -307,57 +339,70 @@ export default function IndicGamePage() {
             </div>
 
             <div className="space-y-1">
-              <span className="text-[11px] uppercase tracking-widest text-amber-400 font-bold">Daily Challenge</span>
+              <span className="text-[11px] uppercase tracking-widest text-amber-400 font-bold">Daily Bharat Challenge</span>
               <h1 className="text-3xl font-serif font-bold text-stone-100">Today's Timeline</h1>
               <p className="text-stone-400 text-xs">5 shared historical milestones across India</p>
             </div>
 
-            <div className="grid grid-cols-1 gap-3.5 pt-1">
-              <button
-                onClick={() => handleStartMode('easy')}
-                className="p-4 sm:p-5 rounded-2xl bg-stone-900/80 border border-stone-800 hover:border-amber-500/60 active:bg-amber-950/30 text-left transition space-y-1 group"
-              >
-                <div className="flex justify-between items-center">
-                  <span className="text-base sm:text-lg font-bold text-amber-400 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-amber-400" /> Easy Mode
-                  </span>
-                  <span className="text-[10px] font-mono uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">
-                    Daily 5
-                  </span>
-                </div>
-                <p className="text-xs text-stone-400 leading-relaxed">
-                  Major revolutions, key battles, and epochal landmarks taught in school.
-                </p>
-              </button>
+            {hasCompletedToday ? (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center space-y-2">
+                <p className="text-sm font-bold text-amber-300">Today's Challenge Completed!</p>
+                <p className="text-xs text-stone-400">You scored {totalScore}/500 today.</p>
+                <button
+                  onClick={() => setSelectedDifficulty(history[0]?.event.difficulty || 'easy')}
+                  className="px-4 py-2 bg-amber-500 text-stone-950 rounded-xl text-xs font-bold"
+                >
+                  View Today's Summary
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3.5 pt-1">
+                <button
+                  onClick={() => handleStartMode('easy')}
+                  className="p-4 sm:p-5 rounded-2xl bg-stone-900/80 border border-stone-800 hover:border-amber-500/60 active:bg-amber-950/30 text-left transition space-y-1 group"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-base sm:text-lg font-bold text-amber-400 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400" /> Easy Mode
+                    </span>
+                    <span className="text-[10px] font-mono uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                      Daily 5
+                    </span>
+                  </div>
+                  <p className="text-xs text-stone-400 leading-relaxed">
+                    Major revolutions, key battles, and epochal landmarks taught in school.
+                  </p>
+                </button>
 
-              <button
-                onClick={() => handleStartMode('hard')}
-                className="p-4 sm:p-5 rounded-2xl bg-stone-900/80 border border-stone-800 hover:border-red-500/60 active:bg-red-950/30 text-left transition space-y-1 group"
-              >
-                <div className="flex justify-between items-center">
-                  <span className="text-base sm:text-lg font-bold text-red-400 flex items-center gap-2">
-                    <Flame className="w-4 h-4 text-red-400" /> Hard Mode
-                  </span>
-                  <span className="text-[10px] font-mono uppercase bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full">
-                    Historian
-                  </span>
-                </div>
-                <p className="text-xs text-stone-400 leading-relaxed">
-                  BCE confrontations, regional naval battles, treaties, and temple groundbreakings.
-                </p>
-              </button>
-            </div>
+                <button
+                  onClick={() => handleStartMode('hard')}
+                  className="p-4 sm:p-5 rounded-2xl bg-stone-900/80 border border-stone-800 hover:border-red-500/60 active:bg-red-950/30 text-left transition space-y-1 group"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-base sm:text-lg font-bold text-red-400 flex items-center gap-2">
+                      <Flame className="w-4 h-4 text-red-400" /> Hard Mode
+                    </span>
+                    <span className="text-[10px] font-mono uppercase bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full">
+                      Historian
+                    </span>
+                  </div>
+                  <p className="text-xs text-stone-400 leading-relaxed">
+                    BCE confrontations, regional naval battles, treaties, and temple groundbreakings.
+                  </p>
+                </button>
+              </div>
+            )}
 
             <button
               onClick={() => setShowInstructions(true)}
               className="text-xs text-stone-400 hover:text-amber-400 transition underline underline-offset-4 font-medium"
             >
-              New here? Read How to Play
+              How are points calculated?
             </button>
           </motion.div>
         )}
 
-        {/* Screen 2: Game Over Screen */}
+        {/* Screen 2: Game Over / Stats Screen (Persistent on refresh) */}
         {selectedDifficulty && isGameOver && (
           <motion.div 
             initial={{ opacity: 0, scale: 0.98 }}
@@ -369,7 +414,9 @@ export default function IndicGamePage() {
             </div>
 
             <div className="space-y-0.5">
-              <h1 className="text-2xl font-serif font-bold text-amber-100">Daily Challenge Complete!</h1>
+              <h1 className="text-2xl font-serif font-bold text-amber-100">
+                {hasCompletedToday ? "Today's Result" : "Daily Challenge Complete!"}
+              </h1>
               <p className="text-stone-400 text-xs tracking-wider uppercase font-medium">
                 Difficulty: <span className="text-amber-400 capitalize">{selectedDifficulty}</span>
               </p>
@@ -379,7 +426,7 @@ export default function IndicGamePage() {
               <div className="py-2.5 px-3 rounded-2xl bg-[#0f1118]/80 border border-stone-800/80">
                 <p className="text-[10px] uppercase tracking-widest text-stone-500 font-semibold mb-0.5">Final Score</p>
                 <p className="text-2xl sm:text-3xl font-mono font-extrabold text-amber-400">
-                  {totalScore} <span className="text-stone-600 text-xs font-normal">/ {activeEvents.length * 125}</span>
+                  {totalScore} <span className="text-stone-600 text-xs font-normal">/ {activeEvents.length * 100}</span>
                 </p>
               </div>
 
@@ -392,7 +439,7 @@ export default function IndicGamePage() {
               </div>
             </div>
 
-            <div className="text-left space-y-2 max-h-48 overflow-y-auto pr-1">
+            <div className="text-left space-y-2 max-h-52 overflow-y-auto pr-1">
               {history.map(({ event, guessDisplay, result }) => (
                 <div key={event.id} className="p-2.5 rounded-xl bg-stone-900/60 border border-stone-800/80 flex justify-between items-center text-xs">
                   <div className="space-y-0.5 max-w-[200px]">
@@ -404,7 +451,7 @@ export default function IndicGamePage() {
                   <div className="text-right">
                     <span className={`font-mono font-bold block ${result.color}`}>+{result.score} pts</span>
                     <span className="text-[9px] text-stone-500 font-medium">
-                      {result.timeBonus > 0 ? `⚡ ${result.title}` : result.title}
+                      Base: {result.baseScore} | Speed: +{result.timeBonus}
                     </span>
                   </div>
                 </div>
@@ -435,7 +482,7 @@ export default function IndicGamePage() {
         {selectedDifficulty && !isGameOver && currentEvent && (
           <div className="space-y-3 sm:space-y-4">
             
-            {/* Header with BACK ARROW Button */}
+            {/* Header */}
             <header className="flex justify-between items-center px-1">
               <div className="flex items-center gap-2.5">
                 <button
@@ -464,11 +511,22 @@ export default function IndicGamePage() {
                   <HelpCircle className="w-4 h-4" />
                 </button>
 
-                <div className="flex items-center gap-1.5 bg-[#181a24]/90 border border-stone-800 px-3 py-1 rounded-full shadow-inner">
+                <div className="relative flex items-center gap-1.5 bg-[#181a24]/90 border border-stone-800 px-3 py-1 rounded-full shadow-inner">
                   <Timer className={`w-3.5 h-3.5 ${timeLeft <= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`} />
                   <span className={`font-mono text-xs font-semibold ${timeLeft <= 5 ? 'text-red-400' : 'text-stone-300'}`}>
                     {timeLeft}s
                   </span>
+
+                  {timeBonusNotice && (
+                    <motion.span 
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: -20 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute left-1/2 -translate-x-1/2 text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/40"
+                    >
+                      +10s
+                    </motion.span>
+                  )}
                 </div>
               </div>
             </header>
@@ -516,12 +574,15 @@ export default function IndicGamePage() {
                   </p>
                 </div>
 
-                {/* Lifelines Panel */}
+                {/* Lifelines Panel (+10s notice) */}
                 {!isSubmitted && (
                   <div className="space-y-2 pt-1 border-t border-stone-800/60">
                     <div className="flex items-center justify-between text-[10px] font-medium text-stone-400 px-0.5">
                       <span className="flex items-center gap-1">
-                        <HelpCircle className="w-3.5 h-3.5 text-amber-400" /> Lifelines ({(!used50YearLifeline ? 1 : 0) + (!usedWorldClueLifeline ? 1 : 0)}/2 left):
+                        <HelpCircle className="w-3.5 h-3.5 text-amber-400" /> Lifelines (+10s each):
+                      </span>
+                      <span className="text-[10px] text-stone-500">
+                        {(!used50YearLifeline ? 1 : 0) + (!usedWorldClueLifeline ? 1 : 0)}/2 remaining
                       </span>
                     </div>
 
@@ -641,24 +702,23 @@ export default function IndicGamePage() {
                         </div>
                       </div>
 
-                      {/* Score Result */}
+                      {/* Transparent 0-100 Score Breakdown */}
                       {lastHistoryItem?.result && (
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <div className="flex items-center justify-center gap-2">
-                            <span className={`text-2xl sm:text-3xl font-mono font-extrabold ${lastHistoryItem.result.color}`}>
+                            <span className={`text-3xl font-mono font-extrabold ${lastHistoryItem.result.color}`}>
                               +{lastHistoryItem.result.score}
                             </span>
                             <span className="text-xs font-sans font-semibold uppercase tracking-wider text-stone-400">
-                              ({lastHistoryItem.result.title})
+                              / 100 ({lastHistoryItem.result.title})
                             </span>
                           </div>
 
-                          {lastHistoryItem.result.timeBonus > 0 && (
-                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] font-mono text-amber-300">
-                              <span>⚡ {lastHistoryItem.result.multiplier}x Speed Bonus</span>
-                              <span className="text-amber-400 font-bold">(+{lastHistoryItem.result.timeBonus} pts)</span>
-                            </div>
-                          )}
+                          <div className="flex items-center justify-center gap-2 text-[11px] font-mono text-stone-400 bg-stone-900/60 py-1 px-3 rounded-lg border border-stone-800/80 w-fit mx-auto">
+                            <span>Base: <strong className="text-stone-200">{lastHistoryItem.result.baseScore}</strong>/80</span>
+                            <span className="text-stone-600">•</span>
+                            <span className="text-emerald-400">Speed: +<strong>{lastHistoryItem.result.timeBonus}</strong>/20</span>
+                          </div>
                         </div>
                       )}
 
@@ -694,7 +754,7 @@ export default function IndicGamePage() {
         )}
       </div>
 
-      {/* Confirmation Modal to Quit to Menu */}
+      {/* Confirmation Modal to Quit */}
       <AnimatePresence>
         {showQuitConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">

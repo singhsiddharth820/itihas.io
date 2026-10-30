@@ -1,5 +1,25 @@
 import { INDIAN_EVENTS, IndianHistoryEvent } from '../data/indianHistoryEvents';
 
+export interface DailyHistoryRecord {
+  event: IndianHistoryEvent;
+  guessDisplay: string;
+  result: {
+    score: number;
+    baseScore: number;
+    timeBonus: number;
+    difference: number;
+    title: string;
+    color: string;
+  };
+}
+
+export interface DailyCompletionData {
+  date: string;
+  difficulty: 'easy' | 'hard';
+  totalScore: number;
+  history: DailyHistoryRecord[];
+}
+
 export interface UserStats {
   currentStreak: number;
   maxStreak: number;
@@ -9,7 +29,7 @@ export interface UserStats {
 }
 
 const STATS_KEY = 'kalaciti_user_stats';
-const DAILY_SAVE_KEY = 'kalaciti_today_result';
+const DAILY_RESULT_PREFIX = 'kalaciti_daily_';
 
 export function getTodayDateString(): string {
   const now = new Date();
@@ -19,7 +39,7 @@ export function getTodayDateString(): string {
   return `${year}-${month}-${day}`;
 }
 
-// 32-bit Mulberry PRNG
+// Deterministic Mulberry32 PRNG
 function mulberry32(seed: number) {
   return function () {
     let t = (seed += 0x6d2b79f5);
@@ -29,7 +49,6 @@ function mulberry32(seed: number) {
   };
 }
 
-// String hash to 32-bit int
 function hashDateString(str: string, salt: string): number {
   let hash = 0;
   const combined = str + salt;
@@ -41,7 +60,6 @@ function hashDateString(str: string, salt: string): number {
   return Math.abs(hash);
 }
 
-// Get deterministic 5 questions for today's date
 export function getDailyEvents(dateStr: string, difficulty: 'easy' | 'hard', count = 5): IndianHistoryEvent[] {
   const pool = INDIAN_EVENTS.filter((e) => e.difficulty === difficulty);
   if (pool.length <= count) return pool;
@@ -71,11 +89,40 @@ export function loadUserStats(): UserStats {
   }
 }
 
-export function recordDailyCompletion(todayDateStr: string, sessionScore: number): UserStats {
+export function getSavedDailyCompletion(dateStr: string): DailyCompletionData | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(`${DAILY_RESULT_PREFIX}${dateStr}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function recordDailyCompletion(
+  todayDateStr: string, 
+  difficulty: 'easy' | 'hard', 
+  sessionScore: number, 
+  history: DailyHistoryRecord[]
+): UserStats {
   const stats = loadUserStats();
 
+  // Save the full daily play data
+  try {
+    const completionData: DailyCompletionData = {
+      date: todayDateStr,
+      difficulty,
+      totalScore: sessionScore,
+      history,
+    };
+    localStorage.setItem(`${DAILY_RESULT_PREFIX}${todayDateStr}`, JSON.stringify(completionData));
+  } catch (e) {
+    console.error('Failed to save daily result', e);
+  }
+
+  // Update streaks if not already logged today
   if (stats.lastPlayedDate === todayDateStr) {
-    return stats; // Already logged today
+    return stats;
   }
 
   const prevDate = stats.lastPlayedDate ? new Date(stats.lastPlayedDate) : null;
