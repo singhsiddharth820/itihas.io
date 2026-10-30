@@ -16,10 +16,11 @@ import {
   UserStats,
   DailyHistoryRecord
 } from '../lib/dailyChallenge';
+import { shareResultsToWhatsApp } from '../lib/shareResult';
 import { 
   Timer, Compass, RotateCcw, ArrowRight, ArrowLeft, Trophy, MapPin, 
   Globe, Sparkles, Flame, BookOpen, Eye, HelpCircle, 
-  Calendar, Zap, Clock, AlertCircle
+  Calendar, Zap, Clock, AlertCircle, Share2, Check
 } from 'lucide-react';
 
 interface ScoreResult {
@@ -110,6 +111,7 @@ export default function IndicGamePage() {
   const [showInstructions, setShowInstructions] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const [timeBonusNotice, setTimeBonusNotice] = useState(false);
+  const [hasCopied, setHasCopied] = useState(false);
   const [todayDateStr, setTodayDateStr] = useState('');
   const [hasCompletedToday, setHasCompletedToday] = useState(false);
   const [stats, setStats] = useState<UserStats>({ 
@@ -163,7 +165,7 @@ export default function IndicGamePage() {
       setTotalScore(savedToday.totalScore);
       setHistory(savedToday.history);
       setActiveEvents(savedToday.history.map(h => h.event));
-      setCurrentIndex(savedToday.history.length); // triggers completion view
+      setCurrentIndex(savedToday.history.length);
     }
 
     const updateMidnightTimer = () => {
@@ -265,6 +267,23 @@ export default function IndicGamePage() {
     setSelectedDifficulty(null);
   };
 
+  const handleShare = async () => {
+    if (!selectedDifficulty) return;
+    const outcome = await shareResultsToWhatsApp(
+      todayDateStr,
+      totalScore,
+      activeEvents.length * 100,
+      stats.currentStreak,
+      selectedDifficulty,
+      history
+    );
+
+    if (outcome === 'clipboard') {
+      setHasCopied(true);
+      setTimeout(() => setHasCopied(false), 2500);
+    }
+  };
+
   // Lifelines: add +10s on activation
   const trigger50YearLifeline = () => {
     if (used50YearLifeline || isSubmitted || !currentEvent) return;
@@ -272,7 +291,6 @@ export default function IndicGamePage() {
     setActiveClues((prev) => ({ ...prev, window50Year: window }));
     setUsed50YearLifeline(true);
     
-    // Add extra 10 seconds
     setTimeLeft((prev) => Math.min(35, prev + 10));
     setTimeBonusNotice(true);
     setTimeout(() => setTimeBonusNotice(false), 2000);
@@ -283,7 +301,6 @@ export default function IndicGamePage() {
     setActiveClues((prev) => ({ ...prev, worldClue: currentEvent.worldContemporary.description }));
     setUsedWorldClueLifeline(true);
     
-    // Add extra 10 seconds
     setTimeLeft((prev) => Math.min(35, prev + 10));
     setTimeBonusNotice(true);
     setTimeout(() => setTimeBonusNotice(false), 2000);
@@ -370,7 +387,7 @@ export default function IndicGamePage() {
                     </span>
                   </div>
                   <p className="text-xs text-stone-400 leading-relaxed">
-                    Major revolutions, key battles, and epochal landmarks taught in school.
+                    3 key historical milestones + 2 iconic cinema, sports, or cultural moments.
                   </p>
                 </button>
 
@@ -469,12 +486,34 @@ export default function IndicGamePage() {
               </span>
             </div>
 
-            <button
-              onClick={handleQuitRound}
-              className="w-full py-3.5 bg-gradient-to-r from-amber-600 to-amber-500 active:from-amber-500 text-stone-950 font-bold rounded-2xl flex items-center justify-center gap-2 transition shadow-lg shadow-amber-950/40"
-            >
-              <RotateCcw className="w-4 h-4 stroke-[2.5]" /> Return to Menu
-            </button>
+            {/* Share & Return Stack */}
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={handleShare}
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition shadow-lg shadow-emerald-950/40 text-sm"
+              >
+                {hasCopied ? (
+                  <>
+                    <Check className="w-4 h-4 text-emerald-200" />
+                    <span>Copied to Clipboard!</span>
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="w-4 h-4" />
+                    <span>Share Result to WhatsApp</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleQuitRound}
+                className="w-full py-3 bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-stone-300 font-semibold rounded-2xl flex items-center justify-center gap-2 transition text-xs"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Return to Menu
+              </button>
+            </div>
           </motion.div>
         )}
 
@@ -556,8 +595,39 @@ export default function IndicGamePage() {
               >
                 {/* Badges */}
                 <div className="flex flex-wrap gap-1.5 items-center">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    <Compass className="w-3 h-3" /> {currentEvent.eraLabel}
+                  {currentEvent.category === 'cinema' && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                      🎬 Cinema
+                    </span>
+                  )}
+                  {currentEvent.category === 'sports' && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      🏆 Sports
+                    </span>
+                  )}
+                  {currentEvent.category === 'literature' && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                      📖 Literature
+                    </span>
+                  )}
+                  {currentEvent.category === 'pop-culture' && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-pink-500/10 text-pink-400 border border-pink-500/20">
+                      📻 Pop Culture
+                    </span>
+                  )}
+                  {currentEvent.category === 'science' && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                      🚀 Science & Space
+                    </span>
+                  )}
+                  {currentEvent.category === 'history' && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      🏛️ History
+                    </span>
+                  )}
+
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-stone-900/80 text-stone-300 border border-stone-800">
+                    <Compass className="w-3 h-3 text-amber-400" /> {currentEvent.eraLabel}
                   </span>
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-stone-900/80 text-stone-400 border border-stone-700/60">
                     <MapPin className="w-3 h-3" /> {currentEvent.region}
@@ -574,7 +644,7 @@ export default function IndicGamePage() {
                   </p>
                 </div>
 
-                {/* Lifelines Panel (+10s notice) */}
+                {/* Lifelines Panel */}
                 {!isSubmitted && (
                   <div className="space-y-2 pt-1 border-t border-stone-800/60">
                     <div className="flex items-center justify-between text-[10px] font-medium text-stone-400 px-0.5">
