@@ -307,7 +307,7 @@ export default function IndicGamePage() {
             </div>
 
             <div className="space-y-1">
-              <span className="text-[11px] uppercase tracking-widest text-amber-400 font-bold">Daily Bharat Challenge</span>
+              <span className="text-[11px] uppercase tracking-widest text-amber-400 font-bold">Daily Challenge</span>
               <h1 className="text-3xl font-serif font-bold text-stone-100">Today's Timeline</h1>
               <p className="text-stone-400 text-xs">5 shared historical milestones across India</p>
             </div>
