@@ -1,23 +1,29 @@
 'use client';
 
 import React from 'react';
+import {
+  INDIA_OUTLINE,
+  INDIA_STATES,
+  INDIA_VIEWBOX,
+  REGION_CENTERS,
+  type IndianRegion,
+} from './indiaMapData';
 
-export type IndianRegion = 'North' | 'South' | 'East' | 'West' | 'Central' | 'Northeast' | 'Pan-India';
+export type { IndianRegion };
 
 export interface IndiaMapProps {
   highlightRegion?: string | IndianRegion;
   className?: string;
 }
 
-// Coordinate focal points mapped on the SVG viewport (0 0 100 120)
-const REGION_COORDINATES: Record<IndianRegion, { cx: number; cy: number; label: string }> = {
-  North: { cx: 48, cy: 30, label: 'North' },
-  South: { cx: 48, cy: 92, label: 'South' },
-  East: { cx: 72, cy: 56, label: 'East' },
-  West: { cx: 28, cy: 62, label: 'West' },
-  Central: { cx: 48, cy: 58, label: 'Central' },
-  Northeast: { cx: 86, cy: 42, label: 'Northeast' },
-  'Pan-India': { cx: 48, cy: 58, label: 'All India' },
+const REGION_LABELS: Record<IndianRegion, string> = {
+  North: 'North',
+  South: 'South',
+  East: 'East',
+  West: 'West',
+  Central: 'Central',
+  Northeast: 'Northeast',
+  'Pan-India': 'All India',
 };
 
 function normalizeToRegion(input?: string): IndianRegion {
@@ -55,7 +61,8 @@ function normalizeToRegion(input?: string): IndianRegion {
     text.includes('hampi') ||
     text.includes('sriharikota') ||
     text.includes('arakkonam') ||
-    text.includes('travancore')
+    text.includes('travancore') ||
+    text.includes('colachel')
   ) {
     return 'South';
   }
@@ -122,79 +129,93 @@ function normalizeToRegion(input?: string): IndianRegion {
   return 'Pan-India';
 }
 
-export default function IndiaMap({ highlightRegion = 'Pan-India', className = 'w-24 h-28' }: IndiaMapProps) {
-  const matchedRegion = normalizeToRegion(highlightRegion);
-  const target = REGION_COORDINATES[matchedRegion];
+export default function IndiaMap({ highlightRegion = 'Pan-India', className = 'w-20 h-24' }: IndiaMapProps) {
+  const region = normalizeToRegion(highlightRegion);
+  const { cx, cy } = REGION_CENTERS[region];
+  const isActive = (stateRegion: string) => region === 'Pan-India' || stateRegion === region;
+
+  const dimStates = INDIA_STATES.filter((s) => !isActive(s.region));
+  const hotStates = INDIA_STATES.filter((s) => isActive(s.region));
 
   return (
-    <div className={`relative flex items-center justify-center select-none ${className}`}>
+    <div className={`relative flex flex-col items-center justify-center select-none ${className}`}>
       <svg
-        viewBox="0 0 100 120"
+        viewBox={INDIA_VIEWBOX}
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        className="w-full h-full drop-shadow-md"
+        className="w-full h-full min-h-0 drop-shadow-md"
+        role="img"
+        aria-label={`Map of India highlighting ${REGION_LABELS[region]}`}
+        preserveAspectRatio="xMidYMid meet"
       >
-        {/* Stylized Silhouette of the Indian Subcontinent */}
-        <path
-          d={`
-            M 48,10 
-            C 53,13 58,18 55,24 
-            C 52,28 62,32 64,36 
-            C 66,39 74,38 78,36 
-            C 84,34 94,37 92,44 
-            C 90,49 84,50 82,56 
-            C 80,60 74,62 70,60 
-            C 68,64 68,70 64,74 
-            C 60,78 56,86 54,94 
-            C 52,99 48,108 47,110 
-            C 45,107 43,99 40,94 
-            C 36,87 34,78 30,73 
-            C 25,69 20,67 22,60 
-            C 23,54 30,52 32,46 
-            C 33,40 38,36 40,32 
-            C 42,27 41,20 44,14 
-            Z
-          `}
-          className="fill-stone-900/90 stroke-amber-500/40"
+        {/* Land silhouette */}
+        <path d={INDIA_OUTLINE} className="fill-stone-950" />
+
+        {/* States outside the highlighted region */}
+        <g
+          className="fill-stone-900 stroke-amber-500/30"
+          strokeWidth="1"
+          strokeLinejoin="round"
+        >
+          {dimStates.map((s) => (
+            <path key={s.id} d={s.d}>
+              <title>{s.name}</title>
+            </path>
+          ))}
+        </g>
+
+        {/* Highlighted region (drawn last so its borders sit on top) */}
+        <g
+          className="fill-amber-500/30 stroke-amber-400/70 transition-colors duration-300"
           strokeWidth="1.2"
           strokeLinejoin="round"
+        >
+          {hotStates.map((s) => (
+            <path key={s.id} d={s.d}>
+              <title>{s.name}</title>
+            </path>
+          ))}
+        </g>
+
+        {/* Country border, glowing */}
+        <path
+          d={INDIA_OUTLINE}
+          className="stroke-amber-500/90"
+          strokeWidth="3"
+          strokeLinejoin="round"
+          strokeLinecap="round"
         />
 
-        {/* Regional Indicator Ring */}
-        {target && (
-          <g>
-            {/* Soft Ambient Beacon */}
-            <circle
-              cx={target.cx}
-              cy={target.cy}
-              r="10"
-              className="fill-amber-400/20 animate-ping"
-            />
-            {/* Reticle Halo */}
-            <circle
-              cx={target.cx}
-              cy={target.cy}
-              r="6.5"
-              fill="none"
-              stroke="#fbbf24"
-              strokeWidth="1"
-              strokeDasharray="2 2"
-              className="animate-[spin_8s_linear_infinite]"
-            />
-            {/* Center Focal Point */}
-            <circle
-              cx={target.cx}
-              cy={target.cy}
-              r="3.2"
-              className="fill-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,0.8)]"
-            />
-          </g>
-        )}
+        {/* Pulsing target reticle */}
+        <g>
+          <circle
+            cx={cx}
+            cy={cy}
+            r="34"
+            className="fill-amber-400/25 animate-ping"
+            style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+          />
+          <circle
+            cx={cx}
+            cy={cy}
+            r="20"
+            fill="none"
+            stroke="#fbbf24"
+            strokeWidth="3.5"
+            strokeDasharray="9 6"
+          />
+          <circle
+            cx={cx}
+            cy={cy}
+            r="9"
+            className="fill-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,0.9)]"
+          />
+        </g>
       </svg>
 
-      {/* Lightweight Region Tag */}
-      <span className="absolute -bottom-1 text-[9px] font-mono tracking-tight font-medium text-amber-300/80 bg-stone-950/80 px-1.5 py-0.2 rounded border border-stone-800 pointer-events-none">
-        {target.label}
+      {/* Region tag */}
+      <span className="text-[9px] font-mono tracking-tight font-medium text-amber-300/80 bg-stone-950/90 px-1.5 py-0.5 rounded border border-stone-800 pointer-events-none mt-0.5">
+        {REGION_LABELS[region]}
       </span>
     </div>
   );
